@@ -1,0 +1,10 @@
+# Dependências principais
+python>=3.8
+
+# Dependências de rede (já incluídas na stdlib)
+ socket, ssl, threading, etc.
+
+# Para futuras expansões
+equests>=2.25.1
+beautifulsoup4>=4.9.3
+scapy>=2.4.5
