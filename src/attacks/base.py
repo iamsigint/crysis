@@ -1,10 +1,10 @@
 """
-Classe base para todos os ataques - CORRIGIDO
+Classe base para todos os ataques - CORREÇÃO URGENTE
 """
 import threading
 from abc import ABC, abstractmethod
 from typing import Any
-from ..core.config import AttackConfig, AttackStats
+from ..core.config import AttackConfig
 
 class BaseAttack(ABC):
     def __init__(self, config: AttackConfig, stats_manager):
@@ -24,9 +24,14 @@ class BaseAttack(ABC):
         self.running = False
     
     def _update_stats(self, bytes_sent: int, packets: int = 1):
-        """Atualiza estatísticas de forma precisa"""
-        self.stats_manager.update(bytes_sent, packets)
+        """Atualiza estatísticas de forma precisa - CORRIGIDO"""
+        if hasattr(self.stats_manager, 'update'):
+            self.stats_manager.update(bytes_sent, packets)
+        else:
+            # Fallback para compatibilidade
+            print(f"⚠️  AVISO: stats_manager não tem método update()")
     
-    def _handle_error(self):
-        """Trata erros de forma mais eficiente"""
-        self.stats_manager.increment_errors(1)
+    def _handle_error(self, count: int = 1):
+        """Trata erros de forma mais eficiente - CORRIGIDO"""
+        if hasattr(self.stats_manager, 'increment_errors'):
+            self.stats_manager.increment_errors(count)
