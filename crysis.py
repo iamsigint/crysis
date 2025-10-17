@@ -156,7 +156,22 @@ class Crysis:
             self._restore_signal_handler()
     
     def execute_real_attack(self, config):
-        """Executa um ataque REAL usando a factory"""
+        """Executa um ataque REAL com otimizações de performance"""
+        
+        # OTIMIZAÇÃO: Aumenta limites do sistema para mais performance
+        try:
+            import resource
+            # Aumenta limite de arquivos abertos
+            resource.setrlimit(resource.RLIMIT_NOFILE, (10000, 10000))
+            print("🔧 Limites de sistema otimizados")
+        except:
+            print("⚠️  Não foi possível otimizar limites do sistema")
+            pass
+        
+        # Configuração de socket para melhor performance
+        import socket
+        socket.setdefaulttimeout(2)  # Timeout global reduzido
+        
         # Prepara estatísticas
         self.stats = AttackStats()
         self.stats.start_time = time.time()
@@ -192,6 +207,8 @@ class Crysis:
             print(f"\n🛑 Attack interrupted by user")
         except Exception as e:
             print(f"\n❌ Attack error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             # Para o ataque
             self.stop_attack()
