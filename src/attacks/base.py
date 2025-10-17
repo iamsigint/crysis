@@ -1,5 +1,5 @@
 """
-Classe base para todos os ataques - CORREÇÃO URGENTE
+Classe base para todos os ataques
 """
 import threading
 from abc import ABC, abstractmethod
@@ -24,14 +24,28 @@ class BaseAttack(ABC):
         self.running = False
     
     def _update_stats(self, bytes_sent: int, packets: int = 1):
-        """Atualiza estatísticas de forma precisa - CORRIGIDO"""
-        if hasattr(self.stats_manager, 'update'):
-            self.stats_manager.update(bytes_sent, packets)
-        else:
-            # Fallback para compatibilidade
-            print(f"⚠️  AVISO: stats_manager não tem método update()")
+        """Atualiza estatísticas de forma ROBUSTA"""
+        try:
+            # Tenta método update() primeiro
+            if hasattr(self.stats_manager, 'update') and callable(self.stats_manager.update):
+                self.stats_manager.update(bytes_sent, packets)
+            else:
+                # Fallback direto para atributos
+                if hasattr(self.stats_manager, 'packets_sent'):
+                    self.stats_manager.packets_sent += packets
+                if hasattr(self.stats_manager, 'bytes_sent'):
+                    self.stats_manager.bytes_sent += bytes_sent
+        except Exception as e:
+            # Em caso de erro, apenas ignora - não quebra o ataque
+            pass
     
     def _handle_error(self, count: int = 1):
-        """Trata erros de forma mais eficiente - CORRIGIDO"""
-        if hasattr(self.stats_manager, 'increment_errors'):
-            self.stats_manager.increment_errors(count)
+        """Trata erros de forma ROBUSTA"""
+        try:
+            if hasattr(self.stats_manager, 'increment_errors') and callable(self.stats_manager.increment_errors):
+                self.stats_manager.increment_errors(count)
+            elif hasattr(self.stats_manager, 'errors'):
+                self.stats_manager.errors += count
+        except Exception:
+            # Ignora erros de estatísticas
+            pass
