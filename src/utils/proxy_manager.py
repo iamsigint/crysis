@@ -23,6 +23,8 @@ class ProxyManager:
         """Inicializa o pool de proxies de forma assíncrona"""
         def init_thread():
             try:
+                # Aguarda um pouco para o proxy_handler carregar
+                time.sleep(2)
                 self._refresh_proxy_pool()
                 self.initialized = True
                 print("✅ Proxy manager inicializado")
@@ -56,7 +58,11 @@ class ProxyManager:
     def get_next_proxy(self) -> Optional[Dict]:
         """Retorna próximo proxy no pool (round-robin)"""
         if not self.initialized:
-            return None
+            # Tenta inicializar sincronamente se ainda não estiver pronto
+            if not self.proxy_handler.proxies:
+                return None
+            self.initialized = True
+            self._refresh_proxy_pool()
             
         with self.lock:
             if not self.proxy_pool:
