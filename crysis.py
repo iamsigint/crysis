@@ -65,11 +65,15 @@ class Crysis:
     
     def _setup_signal_handlers(self):
         """Configura handlers de sinal de forma segura"""
-        self.original_sigint = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, self._signal_handler)
+        try:
+            self.original_sigint = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, self._signal_handler)
+        except Exception as e:
+            print(f"⚠️  Aviso de signal: {e}")
+            self.original_sigint = None
     
     def _signal_handler(self, signum, frame):
-        """Handler para Ctrl+C"""
+        """Handler para Ctrl+C de forma segura"""
         if self.interrupted:
             # Segundo Ctrl+C - saída forçada
             print("\n\n🛑 Saindo forçadamente...")
@@ -79,20 +83,29 @@ class Crysis:
         print("\n\n🛑 Recebido sinal de interrupção...")
         self.stop_attack()
         
-        # Restaura handler original após um delay
-        threading.Timer(1.0, self._restore_signal_handler).start()
+        # Restaura handler original de forma segura
+        self._safe_restore_signal_handler()
     
-    def _restore_signal_handler(self):
-        """Restaura o handler de sinal original"""
-        signal.signal(signal.SIGINT, self.original_sigint)
-        self.interrupted = False
+    def _safe_restore_signal_handler(self):
+        """Restaura o handler de sinal original de forma segura"""
+        try:
+            if self.original_sigint is not None:
+                signal.signal(signal.SIGINT, self.original_sigint)
+            self.interrupted = False
+        except Exception as e:
+            # Ignora erros de signal em threads não principais
+            pass
     
     def _safe_input(self, prompt: str) -> str:
         """Input seguro que trata Ctrl+C"""
         try:
             return input(prompt)
         except (KeyboardInterrupt, EOFError):
+            print("\n⏹️  Operação cancelada.")
             self.stop_attack()
+            raise SystemExit()
+        except Exception as e:
+            print(f"\n❌ Erro no input: {e}")
             raise
     
     def display_welcome(self):
@@ -110,6 +123,11 @@ class Crysis:
             accept = self._safe_input("🔐 Do you accept the terms and conditions? (y/n): ").lower()
             return accept in ['y', 'yes', 's', 'sim']
         except (KeyboardInterrupt, EOFError):
+            return False
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"❌ Erro: {e}")
             return False
     
     def run(self):
@@ -135,15 +153,22 @@ class Crysis:
                     self.execute_real_attack(config)
                     
                     # Pergunta se quer continuar
-                    again = self._safe_input("\n🔄 Run another attack? (y/n): ").lower()
-                    if again not in ['y', 'yes', 's', 'sim']:
+                    try:
+                        again = self._safe_input("\n🔄 Run another attack? (y/n): ").lower()
+                        if again not in ['y', 'yes', 's', 'sim']:
+                            break
+                    except SystemExit:
                         break
                         
                 except (KeyboardInterrupt, EOFError):
                     print("\n\n⏹️  Operation cancelled.")
                     break
+                except SystemExit:
+                    break
                 except Exception as e:
                     print(f"\n❌ Error: {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
         
             print("\n🎉 Thank you for using CRYSIS!")
@@ -153,7 +178,7 @@ class Crysis:
             import traceback
             traceback.print_exc()
         finally:
-            self._restore_signal_handler()
+            self._safe_restore_signal_handler()
     
     def execute_real_attack(self, config):
         """Executa um ataque REAL com otimizações de performance"""
@@ -195,12 +220,14 @@ class Crysis:
             # Inicia monitor de progresso em thread separada
             monitor_thread = threading.Thread(
                 target=self._progress_monitor, 
-                args=(config.duration,)
+                args=(config.duration,),
+                name="ProgressMonitor"
             )
             monitor_thread.daemon = True
             monitor_thread.start()
             
             # Executa o ataque
+            print("⚡ Iniciando ataque...")
             attack.execute()
             
         except KeyboardInterrupt:
@@ -212,6 +239,9 @@ class Crysis:
         finally:
             # Para o ataque
             self.stop_attack()
+            
+            # Aguarda um pouco para estatísticas finais
+            time.sleep(1)
             
             # Mostra resumo final
             self._show_final_summary()
@@ -235,16 +265,18 @@ class Crysis:
     def _progress_monitor(self, duration: int):
         """Monitora progresso do ataque em tempo real"""
         start_time = time.time()
+        last_update = start_time
         
         while self.running and (time.time() - start_time) < duration:
             try:
                 current_stats = self.stats.get_stats()
-                elapsed = time.time() - current_stats['start_time']
+                current_time = time.time()
+                elapsed = current_time - current_stats['start_time']
                 
-                if elapsed > 0:
+                if elapsed > 0 and (current_time - last_update) >= 0.5:
                     packets_per_sec = current_stats['packets_sent'] / elapsed
                     mbps = (current_stats['bytes_sent'] * 8) / (elapsed * 1000000)
-                    success_rate = 100 - (current_stats['errors'] / max(current_stats['packets_sent'], 1) * 100)
+                    success_rate = 100 - (current_stats['errors'] / max(current_stats['packets_sent'], 1) * 100) if current_stats['packets_sent'] > 0 else 100
                     
                     progress_line = (
                         f"📊 Packets: {current_stats['packets_sent']:,} | "
@@ -255,18 +287,23 @@ class Crysis:
                     )
                     
                     print(f"\r{progress_line}", end="", flush=True)
+                    last_update = current_time
                 
-                time.sleep(0.5)
+                time.sleep(0.1)
                 
             except KeyboardInterrupt:
                 break
-            except Exception:
-                break
+            except Exception as e:
+                # Ignora erros no monitor para não travar o ataque
+                continue
         
         print()  # Nova linha após o progresso
     
     def _show_final_summary(self):
         """Exibe resumo final do ataque"""
+        # Aguarda um momento para estatísticas finais se estabilizarem
+        time.sleep(0.5)
+        
         final_stats = self.stats.get_stats()
         duration = time.time() - final_stats['start_time']
         
@@ -279,8 +316,10 @@ class Crysis:
         print(f"⏱️  Duration: {duration:.2f}s")
         
         if duration > 0:
-            print(f"⚡ Average Speed: {final_stats['packets_sent']/duration:.1f} pps")
-            print(f"🌊 Bandwidth: {(final_stats['bytes_sent']*8)/(duration*1000000):.2f} Mbps")
+            avg_speed = final_stats['packets_sent'] / duration
+            bandwidth = (final_stats['bytes_sent'] * 8) / (duration * 1000000)
+            print(f"⚡ Average Speed: {avg_speed:.1f} pps")
+            print(f"🌊 Bandwidth: {bandwidth:.2f} Mbps")
             
             if final_stats['packets_sent'] > 0:
                 success_rate = 100 - (final_stats['errors'] / final_stats['packets_sent'] * 100)
@@ -289,14 +328,24 @@ class Crysis:
         print(f"{'='*70}")
     
     def stop_attack(self):
-        """Para o ataque atual"""
+        """Para o ataque atual de forma segura"""
         self.running = False
         self.stop_event.set()
+        
+        # Pequena pausa para threads terminarem
+        time.sleep(0.5)
 
 def main():
     """Função principal"""
-    crysis = Crysis()
-    crysis.run()
+    try:
+        crysis = Crysis()
+        crysis.run()
+    except KeyboardInterrupt:
+        print("\n\n👋 Programa encerrado pelo usuário")
+    except Exception as e:
+        print(f"\n💥 Erro fatal: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     main()
