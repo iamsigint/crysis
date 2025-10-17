@@ -7,13 +7,13 @@ from ..core.validator import TargetValidator
 
 class AttackMenu:
     """Menu de seleção de ataques"""
-    
+
     def __init__(self):
         from .banner import BannerDisplay  # Import local para evitar circular
         self.banner = BannerDisplay()
         self.validator = TargetValidator()
         self.attack_categories = self._init_attack_categories()
-    
+
     def _init_attack_categories(self) -> Dict[str, List[Dict]]:
         """Inicializa categorias de ataque"""
         return {
@@ -63,44 +63,44 @@ class AttackMenu:
                 {"id": 31, "name": "XML-RPC Flood", "type": AttackType.XML_RPC_FLOOD, "desc": "WordPress/RPC attack"}
             ]
         }
-    
+
     def display_main_menu(self):
         """Exibe menu principal de ataques"""
         self.banner.show()
-        
+
         print(f"\n{'='*80}")
         print(f"🎯 ELITE ATTACK SELECTION - CHOOSE YOUR WEAPON:")
         print(f"{'='*80}")
-        
+
         for category, attacks in self.attack_categories.items():
             print(f"\n{category}:")
             for attack in attacks:
                 print(f"  {attack['id']:2d}. {attack['name']:<25} - {attack['desc']}")
-        
+
         print(f"\n{'='*80}")
-    
+
     def get_attack_config(self) -> AttackConfig:
         """Obtém configuração completa do usuário"""
         self.display_main_menu()
-        
+
         # Seleção do tipo de ataque
         attack_id = self._get_attack_choice()
         attack_type = self._get_attack_type(attack_id)
-        
+
         # Informações do alvo
         target_ip = self._get_target_ip()
         target_port = self._get_target_port(attack_type)
-        
+
         # Parâmetros do ataque
         duration = self._get_duration()
         threads = self._get_threads()
         packet_size = self._get_packet_size()
-        
+
         # Features avançadas
         spoof_ip = self._get_boolean_setting("Use IP Spoofing")
         use_proxy, proxy_type = self._get_proxy_settings()
         randomize = self._get_boolean_setting("Randomize packets")
-        
+
         return AttackConfig(
             target_ip=target_ip,
             target_port=target_port,
@@ -113,7 +113,7 @@ class AttackMenu:
             randomize_packets=randomize,
             proxy_type=proxy_type  # Novo campo para tipo de proxy
         )
-    
+
     def _safe_input(self, prompt: str) -> str:
         """Input seguro que trata Ctrl+C"""
         try:
@@ -121,25 +121,25 @@ class AttackMenu:
         except (KeyboardInterrupt, EOFError):
             print("\n⏹️  Operation cancelled.")
             raise
-    
+
     def _get_proxy_settings(self) -> Tuple[bool, str]:
         """Obtém configurações de proxy"""
         print(f"\n🔗 CONFIGURAÇÕES DE PROXY:")
-        
+
         try:
             use_proxy = self._get_boolean_setting("Usar Proxy Chain")
         except (KeyboardInterrupt, EOFError):
             return False, None
-        
+
         proxy_type = None
-        
+
         if use_proxy:
             print(f"\n🎯 Tipos de Proxy disponíveis:")
             print("  1. Aleatório (melhor disponível)")
             print("  2. HTTP/HTTPS")
             print("  3. SOCKS4")
             print("  4. SOCKS5")
-            
+
             while True:
                 try:
                     choice = self._safe_input("Selecione tipo de proxy (1-4): ").strip()
@@ -151,7 +151,7 @@ class AttackMenu:
                     }
                     if choice in proxy_types:
                         proxy_type = proxy_types[choice]
-                        
+
                         # Mostra informações dos proxies disponíveis
                         self._show_proxy_info(proxy_type)
                         break
@@ -162,45 +162,65 @@ class AttackMenu:
                     return False, None
                 except ValueError:
                     print("❌ Entrada inválida!")
-        
+
         return use_proxy, proxy_type
-    
+
     def _show_proxy_info(self, proxy_type: str):
         """Mostra informações sobre os proxies disponíveis"""
         try:
             from ..utils.proxy_manager import proxy_manager
-            
+
+            # Aguarda um pouco se ainda não estiver inicializado
+            if not proxy_manager.initialized:
+                print("⏳ Inicializando proxy manager...")
+                for i in range(3):
+                    time.sleep(0.5)
+                    if proxy_manager.initialized:
+                        break
+
             proxy_info = proxy_manager.get_proxy_info()
             total_proxies = proxy_info['total_proxies']
-            
-            if total_proxies > 0:
-                print(f"✅ {total_proxies} proxies disponíveis")
-                
+            pool_size = proxy_info.get('pool_size', 0)
+            status = proxy_info.get('status', 'unknown')
+
+            if status == 'initializing':
+                print("⏳ Proxy manager ainda inicializando...")
+                return
+
+            if pool_size > 0:
+                print(f"✅ {pool_size} proxies ativos no pool")
+                if total_proxies > pool_size:
+                    print(f"📊 Total disponíveis na API: {total_proxies}")
+
                 # Mostra estatísticas por tipo
                 if proxy_type == 'random':
                     print("📊 Distribuição por tipo:")
                     for p_type, count in proxy_info['by_type'].items():
                         print(f"   • {p_type.upper()}: {count} proxies")
-                
+
                 # Mostra alguns países
-                countries = list(proxy_info['by_country'].items())[:5]
+                countries = list(proxy_info['by_country'].items())[:3]
                 if countries:
                     print("🌍 Principais países:")
                     for country, count in countries:
                         print(f"   • {country}: {count} proxies")
-                
+
                 print(f"🔄 Próxima atualização: em {self._format_time_remaining(proxy_info['next_update'])}")
+            elif total_proxies > 0:
+                print(f"⚠️  {total_proxies} proxies na API, mas nenhum no pool ativo")
+                print("💡 Tentando carregar proxies de fallback...")
             else:
                 print("⚠️  Nenhum proxy disponível no momento")
-                
+                print("💡 Usando conexão direta")
+
         except Exception as e:
             print(f"⚠️  Não foi possível carregar informações dos proxies: {e}")
-    
+
     def _format_time_remaining(self, next_update: float) -> str:
         """Formata tempo restante para próxima atualização"""
         import time
         remaining = next_update - time.time()
-        
+
         if remaining <= 0:
             return "agora"
         elif remaining < 60:
@@ -209,40 +229,40 @@ class AttackMenu:
             return f"{int(remaining/60)} minutos"
         else:
             return f"{int(remaining/3600)} horas"
-    
+
     def _get_attack_choice(self) -> int:
         """Obtém escolha do tipo de ataque"""
         while True:
             try:
                 choice = self._safe_input(f"\n🎲 Select attack type (1-31): ").strip()
                 attack_id = int(choice)
-                
+
                 if 1 <= attack_id <= 31:
                     return attack_id
                 else:
                     print("❌ Please enter a number between 1 and 31")
-                    
+
             except (KeyboardInterrupt, EOFError):
                 print("\n⏹️  Operation cancelled.")
                 raise
             except ValueError:
                 print("❌ Please enter a valid number")
-    
+
     def _get_attack_type(self, attack_id: int) -> AttackType:
         """Mapeia ID para tipo de ataque"""
         for category in self.attack_categories.values():
             for attack in category:
                 if attack['id'] == attack_id:
                     return attack['type']
-        
+
         return AttackType.MIXED_ATTACK
-    
+
     def _get_target_ip(self) -> str:
         """Obtém IP/domínio do alvo"""
         while True:
             try:
                 target = self._safe_input(f"\n🎯 Target IP/Domain: ").strip()
-                
+
                 if self.validator.validate_target(target):
                     return target
                 else:
@@ -250,7 +270,7 @@ class AttackMenu:
             except (KeyboardInterrupt, EOFError):
                 print("\n⏹️  Operation cancelled.")
                 raise
-    
+
     def _get_target_port(self, attack_type: AttackType) -> int:
         """Obtém porta do alvo com base no tipo de ataque"""
         default_ports = {
@@ -269,88 +289,88 @@ class AttackMenu:
             AttackType.API_FLOOD: 80,
             AttackType.XML_RPC_FLOOD: 80
         }
-        
+
         default_port = default_ports.get(attack_type, 80)
-        
+
         while True:
             try:
                 port_input = self._safe_input(f"🔌 Target port [default: {default_port}]: ").strip()
-                
+
                 if not port_input:
                     return default_port
-                
+
                 port = int(port_input)
                 if 1 <= port <= 65535:
                     return port
                 else:
                     print("❌ Port must be between 1-65535")
-                    
+
             except (KeyboardInterrupt, EOFError):
                 print("\n⏹️  Operation cancelled.")
                 raise
             except ValueError:
                 print("❌ Please enter a valid port number")
-    
+
     def _get_duration(self) -> int:
         """Obtém duração do ataque"""
         while True:
             try:
                 duration = self._safe_input(f"⏰ Duration (seconds): ").strip()
                 duration_int = int(duration)
-                
+
                 if duration_int > 0:
                     return duration_int
                 else:
                     print("❌ Duration must be positive")
-                    
+
             except (KeyboardInterrupt, EOFError):
                 print("\n⏹️  Operation cancelled.")
                 raise
             except ValueError:
                 print("❌ Please enter a valid number")
-    
+
     def _get_threads(self) -> int:
         """Obtém número de threads"""
         while True:
             try:
                 threads = self._safe_input(f"🧵 Number of threads (1-1000): ").strip()
                 threads_int = int(threads)
-                
+
                 if 1 <= threads_int <= 1000:
                     return threads_int
                 else:
                     print("❌ Threads must be between 1-1000")
-                    
+
             except (KeyboardInterrupt, EOFError):
                 print("\n⏹️  Operation cancelled.")
                 raise
             except ValueError:
                 print("❌ Please enter a valid number")
-    
+
     def _get_packet_size(self) -> int:
         """Obtém tamanho do pacote"""
         while True:
             try:
                 size = self._safe_input(f"📦 Packet size (bytes, 1-65535): ").strip()
                 size_int = int(size)
-                
+
                 if 1 <= size_int <= 65535:
                     return size_int
                 else:
                     print("❌ Size must be between 1-65535")
-                    
+
             except (KeyboardInterrupt, EOFError):
                 print("\n⏹️  Operation cancelled.")
                 raise
             except ValueError:
                 print("❌ Please enter a valid number")
-    
+
     def _get_boolean_setting(self, setting_name: str) -> bool:
         """Obtém configuração booleana do usuário"""
         while True:
             try:
                 response = self._safe_input(f"🔧 {setting_name}? (y/n): ").strip().lower()
-                
+
                 if response in ['y', 'yes', 's', 'sim']:
                     return True
                 elif response in ['n', 'no', 'não']:
