@@ -1,5 +1,5 @@
 """
-Classe base para todos os ataques
+Classe base para todos os ataques - CORRIGIDO
 """
 import threading
 from abc import ABC, abstractmethod
@@ -23,10 +23,10 @@ class BaseAttack(ABC):
         self.stop_event.set()
         self.running = False
     
-    def _update_stats(self, bytes_sent: int):
-        """Atualiza estatísticas"""
-        self.stats_manager.update_stats(bytes_sent)
+    def _update_stats(self, bytes_sent: int, packets: int = 1):
+        """Atualiza estatísticas de forma precisa"""
+        self.stats_manager.update(bytes_sent, packets)
     
     def _handle_error(self):
-        """Trata erros"""
-        self.stats_manager.increment_errors()
+        """Trata erros de forma mais eficiente"""
+        self.stats_manager.increment_errors(1)
