@@ -167,6 +167,8 @@ class AttackMenu:
 
     def _show_proxy_info(self, proxy_type: str):
         """Mostra informações sobre os proxies disponíveis"""
+        import time
+        
         try:
             from ..utils.proxy_manager import proxy_manager
 
